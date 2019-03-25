@@ -1,9 +1,11 @@
 CONST true = -1, false = 0
 
+RANDOMIZE TIMER
+
 DIM gameArea AS LONG
 gameArea = _NEWIMAGE(400, 500, 32)
 SCREEN gameArea
-_TITLE "Blockout"
+_TITLE "Breakout"
 _PRINTMODE _KEEPBACKGROUND
 
 TYPE Block
@@ -11,6 +13,8 @@ TYPE Block
     y AS INTEGER
     c AS _UNSIGNED LONG
     state AS _BYTE
+    special AS _BYTE
+    kind AS _BYTE
 END TYPE
 
 TYPE Ball
@@ -25,15 +29,71 @@ TYPE Ball
     yVel AS SINGLE
 END TYPE
 
+TYPE Particle
+    x AS SINGLE
+    y AS SINGLE
+    xAcc AS SINGLE
+    yAcc AS SINGLE
+    xVel AS SINGLE
+    yVel AS SINGLE
+    r AS _UNSIGNED _BYTE
+    g AS _UNSIGNED _BYTE
+    b AS _UNSIGNED _BYTE
+    state AS _BYTE
+    size AS INTEGER
+    lifeSpan AS SINGLE
+    birth AS SINGLE
+    special AS _BYTE
+    kind AS _BYTE
+END TYPE
+
+TYPE Special
+    start AS SINGLE
+    span AS INTEGER
+END TYPE
+
+CONST gravity = .03
+
 CONST blockWidth = 50
 CONST blockHeight = 25
 CONST paddleHeight = 10
 
+CONST round = 0
+CONST square = 1
+CONST specialPower = 2
+
+CONST left = -1
+CONST right = 1
+CONST up = -1
+CONST down = 1
+
+CONST regular = 0
+CONST hitTwice = 1
+CONST unbreakable = 2
+
+CONST bullet = 1
+
 DIM SHARED block(1 TO 80) AS Block, ball AS Ball
+DIM SHARED particle(1 TO 10000) AS Particle
 DIM SHARED win AS _BYTE, quit AS STRING * 1
 DIM SHARED paddleX AS INTEGER, paddleY AS INTEGER
-DIM SHARED paddleWidth AS INTEGER
+DIM SHARED paddleWidth AS INTEGER, magneticOffset AS INTEGER
 DIM SHARED score AS INTEGER, lives AS INTEGER
+DIM SHARED special(1 TO 4) AS Special
+
+DIM SHARED electricColor(1 TO 2) AS _UNSIGNED LONG
+electricColor(1) = _RGB32(255, 255, 255)
+electricColor(2) = _RGB32(50, 211, 255)
+
+CONST FireBall = 1
+CONST Shooter = 2
+CONST BreakThrough = 3
+CONST Magnetic = 4
+
+special(FireBall).span = 15
+special(Shooter).span = 15
+special(BreakThrough).span = 15
+special(Magnetic).span = 15
 
 paddleY = _HEIGHT - blockHeight - paddleHeight - 1
 
@@ -45,26 +105,58 @@ DO
     ball.state = false
     ball.c = _RGB32(161, 161, 155)
     ball.radius = 5
-    ball.xDir = 1
-    ball.yDir = -1
+    ball.xDir = right
+    ball.yDir = up
     ball.xVel = 3
     ball.yVel = 3
+    FOR i = 1 TO UBOUND(special)
+        special(i).start = 0
+    NEXT
+    magneticOffset = paddleWidth / 2
+
+    FOR i = 1 TO UBOUND(particle)
+        resetParticle particle(i)
+    NEXT
 
     _MOUSEHIDE
-    _KEYCLEAR
 
     DO
-        alpha = map(ball.xVel, 3, 6, 255, 30)
+        k& = _KEYHIT
+        IF k& = ASC("s") THEN special(Shooter).start = TIMER
+        IF k& = ASC("m") THEN special(Magnetic).start = TIMER
+        IF k& = ASC("b") THEN special(BreakThrough).start = TIMER
+        IF k& = ASC("f") THEN special(FireBall).start = TIMER
+        IF k& = 27 THEN EXIT DO
+
+        IF TIMER - special(BreakThrough).start < special(BreakThrough).span THEN
+            alpha = map(ball.xVel, 3, 6, 80, 30)
+        ELSE
+            alpha = 255
+        END IF
         LINE (0, 0)-(_WIDTH, _HEIGHT), _RGBA32(0, 0, 0, alpha), BF
+
         showBlocks
         doPaddle
         doBall
+        doParticles
 
         m$ = "Score:" + STR$(score) + " Lives:" + STR$(lives)
         COLOR _RGB32(0, 0, 0)
         _PRINTSTRING (1, 1), m$
         COLOR _RGB32(255, 255, 255)
         _PRINTSTRING (0, 0), m$
+
+        'IF TIMER - special(BreakThrough).start < special(BreakThrough).span THEN
+        '    _PRINTSTRING (0, 370), "breakthrough: " + STR$(INT(TIMER - special(BreakThrough).start))
+        'END IF
+
+        'IF TIMER - special(Shooter).start < special(Shooter).span THEN
+        '    _PRINTSTRING (0, 388), "shooter: " + STR$(INT(TIMER - special(Shooter).start))
+        'END IF
+
+        'IF TIMER - special(Magnetic).start < special(Magnetic).span THEN
+        '    _PRINTSTRING (0, 406), "magnetic: " + STR$(INT(TIMER - special(Magnetic).start))
+        'END IF
 
         _DISPLAY
         _LIMIT 60
@@ -75,11 +167,12 @@ DO
     CLS
     IF win THEN
         PRINT "Good job, you win."
+        PRINT "Continue (y/n)?"
     ELSE
         PRINT "You lose."
+        PRINT "Restart (y/n)?"
     END IF
 
-    PRINT "Continue (y/n)?"
     _AUTODISPLAY
 
     DO
@@ -90,26 +183,154 @@ LOOP WHILE quit = "y"
 
 SYSTEM
 
+SUB doParticles
+    DIM thisColor AS _UNSIGNED LONG, alpha AS _UNSIGNED _BYTE
+
+    FOR i = 1 TO UBOUND(particle)
+        IF particle(i).state = false THEN _CONTINUE
+        IF particle(i).lifeSpan > 0 AND TIMER - particle(i).birth > particle(i).lifeSpan THEN particle(i).state = false: _CONTINUE
+
+        'move
+        particle(i).xVel = particle(i).xVel + particle(i).xAcc
+        particle(i).yVel = particle(i).yVel + particle(i).yAcc + gravity
+        particle(i).x = particle(i).x + particle(i).xVel
+        particle(i).y = particle(i).y + particle(i).yVel
+
+        IF particle(i).kind = bullet THEN
+            l = newParticle
+            IF l THEN
+                particle(l).r = 222 + (RND * 30)
+                particle(l).g = 100 + (RND * 70)
+                particle(l).x = particle(i).x
+                particle(l).y = particle(i).y
+                particle(l).lifeSpan = 0.05
+            END IF
+        END IF
+
+        'check visibility
+        IF particle(i).x - particle(i).size / 2 < 0 OR particle(i).x + particle(i).size / 2 > _WIDTH OR particle(i).y - particle(i).size / 2 < 0 OR particle(i).y + particle(i).size / 2 > _HEIGHT THEN
+            particle(i).state = false
+            _CONTINUE
+        END IF
+
+        'show
+        IF particle(i).lifeSpan > 0 THEN
+            alpha = map(TIMER - particle(i).birth, 0, particle(i).lifeSpan, 255, 0)
+        ELSE
+            alpha = 255
+        END IF
+
+        thisColor = _RGBA32(particle(i).r, particle(i).g, particle(i).b, alpha)
+
+        IF particle(i).size > 0 THEN
+            SELECT CASE particle(i).kind
+                CASE round, bullet
+                    CircleFill particle(i).x, particle(i).y, particle(i).size, thisColor
+                CASE square
+                    LINE (particle(i).x - size / 2, particle(i).y - size / 2)-STEP(particle(i).size, particle(i).size), thisColor, BF
+                CASE specialPower
+                    SELECT CASE particle(i).special
+                        CASE Magnetic
+                            FOR j = 1 TO 2
+                                PSET (particle(i).x, particle(i).y), electricColor(j)
+                                FOR k = 0 TO _PI(2) STEP .2
+                                    LINE -(particle(i).x + COS(k) * (particle(i).size + particle(i).size * RND), particle(i).y + SIN(k) * (particle(i).size + particle(i).size * RND)), electricColor(j)
+                                NEXT
+                                LINE -(particle(i).x, particle(i).y), electricColor(j)
+                            NEXT
+                            CircleFill particle(i).x, particle(i).y, particle(i).size, thisColor
+                    END SELECT
+            END SELECT
+        ELSE
+            PSET (particle(i).x, particle(i).y), thisColor
+        END IF
+
+        'check collision with paddle if this particle contains a special power
+        IF particle(i).special THEN
+            COLOR _RGB32(0, 0, 0)
+            _PRINTSTRING (particle(i).x, particle(i).y), LTRIM$(STR$(particle(i).special))
+            IF particle(i).x - particle(i).size / 2 > paddleX AND particle(i).x + particle(i).size / 2 < paddleX + paddleWidth AND particle(i).y + particle(i).size / 2 >= paddleY THEN
+                particle(i).state = false
+                special(particle(i).special).start = TIMER
+            END IF
+        END IF
+
+        'check collision with blocks if this particle is a bullet
+        IF particle(i).kind = bullet THEN
+            FOR j = 1 TO 80
+                IF block(j).state = false THEN _CONTINUE
+                IF particle(i).x > block(j).x AND particle(i).x < block(j).x + blockWidth AND particle(i).y < block(j).y + blockHeight THEN
+                    destroyBlock j, false
+                    IF TIMER - special(BreakThrough).start > special(BreakThrough).span OR special(BreakThrough).start = 0 THEN
+                        particle(i).state = false
+                    END IF
+                    EXIT FOR
+                END IF
+            NEXT
+        END IF
+    NEXT
+END SUB
+
+SUB resetParticle (this AS Particle)
+    DIM empty AS Particle
+    this = empty
+END SUB
+
 SUB generateBlocks
     FOR i = 1 TO 8
         FOR j = 1 TO 10
             b = b + 1
             block(b).x = (i - 1) * blockWidth
             block(b).y = (j - 1) * blockHeight
-            block(b).c = _RGB32(255 * RND, 255 * RND, 255 * RND)
+            minRGB = 50
+            DO
+                red = 255 * RND
+                green = 255 * RND
+                blue = 255 * RND
+            LOOP UNTIL red > minRGB AND green > minRGB AND blue > minRGB
+            block(b).c = _RGB32(red, green, blue)
             block(b).state = RND
+            r = RND * 1000
+            IF r > 150 AND r < 200 THEN
+                block(b).special = RND * UBOUND(special)
+            END IF
+
+            r = RND * 1000
+            IF r > 150 AND r < 200 THEN
+                block(b).kind = RND * 2
+            END IF
         NEXT
     NEXT
 END SUB
 
 SUB showBlocks
-    win = true
     FOR i = 1 TO 80
         IF block(i).state = false THEN _CONTINUE
-        win = false
-        LINE (block(i).x, block(i).y)-STEP(blockWidth - 1, blockHeight - 1), block(i).c, BF
-        LINE (block(i).x, block(i).y)-STEP(blockWidth - 1, blockHeight - 1), _RGB32(0, 0, 0), B
+        activeBlocks = activeBlocks + 1
+        IF block(i).kind <> unbreakable THEN
+            LINE (block(i).x, block(i).y)-STEP(blockWidth - 1, blockHeight - 1), block(i).c, BF
+        END IF
+
+        IF block(i).kind = hitTwice THEN
+            FOR x = block(i).x TO block(i).x + blockWidth - 1 STEP 5
+                LINE (x, block(i).y)-(x, block(i).y + blockHeight - 1), _RGB32(188, 188, 188)
+            NEXT
+        ELSEIF block(i).kind = unbreakable THEN
+            activeBlocks = activeBlocks - 1
+            FOR x = block(i).x TO block(i).x + blockWidth - 1 STEP 5
+                LINE (x, block(i).y)-(x, block(i).y + blockHeight - 1), _RGB32(72, 72, 72)
+            NEXT
+            FOR y = block(i).y TO block(i).y + blockHeight - 1 STEP 5
+                LINE (block(i).x, y)-(block(i).x + blockWidth - 1, y), _RGB32(72, 72, 72)
+            NEXT
+        END IF
+
+        LINE (block(i).x, block(i).y)-STEP(blockWidth - 1, blockHeight - 1), _RGB32(255, 255, 255), B
+        LINE (block(i).x + 1, block(i).y + 1)-STEP(blockWidth - 3, blockHeight - 3), _RGB32(0, 0, 0), B
+
+        IF block(i).special THEN _PRINTSTRING (block(i).x, block(i).y), STR$(block(i).special)
     NEXT
+    win = (activeBlocks = 0)
 END SUB
 
 SUB doPaddle
@@ -130,30 +351,104 @@ SUB doPaddle
     LINE (paddleX + paddleHeight / 2, paddleY)-STEP(paddleWidth - paddleHeight, paddleHeight), _RGB32(89, 161, 255), BF
     CircleFill paddleX + paddleHeight / 2, paddleY + paddleHeight / 2, paddleHeight / 2, _RGB32(194, 89, 61)
     CircleFill paddleX + paddleWidth - paddleHeight / 2, paddleY + paddleHeight / 2, paddleHeight / 2, _RGB32(194, 89, 61)
+
+    IF TIMER - special(Magnetic).start < special(Magnetic).span THEN
+        FOR j = 1 TO 2
+            PSET (paddleX + paddleHeight / 2, paddleY), electricColor(j)
+            FOR i = paddleX + paddleHeight TO paddleX + paddleWidth - paddleHeight STEP paddleWidth / 10
+                LINE -(i, paddleY - (RND * 10)), electricColor(j)
+            NEXT
+            LINE -(paddleX + paddleWidth - paddleHeight / 2, paddleY), electricColor(j)
+
+        NEXT
+    END IF
+
     IF _MOUSEBUTTON(1) OR _KEYDOWN(13) THEN ball.state = true
+
+    IF _MOUSEBUTTON(1) THEN
+        STATIC mouseWasDown AS _BYTE
+        mouseWasDown = true
+    END IF
+
+    IF TIMER - special(Shooter).start < special(Shooter).span THEN
+        CircleFill paddleX + paddleHeight / 2, paddleY, paddleHeight / 3, _RGB32(194, 133, 61)
+        CircleFill paddleX + paddleWidth - paddleHeight / 2, paddleY, paddleHeight / 3, _RGB32(194, 133, 61)
+
+        CircleFill paddleX + paddleHeight / 2, paddleY - paddleHeight / 4, paddleHeight / 4, _RGB32(194, 188, 61)
+        CircleFill paddleX + paddleWidth - paddleHeight / 2, paddleY - paddleHeight / 4, paddleHeight / 4, _RGB32(194, 188, 61)
+
+        IF _MOUSEBUTTON(1) = false AND mouseWasDown THEN
+            mouseWasDown = false
+
+            FOR i = 1 TO 2
+                l = newParticle
+                particle(l).r = 100
+                particle(l).g = 100
+                particle(l).b = 100
+                IF i = 1 THEN particle(l).x = paddleX + paddleHeight / 2 ELSE particle(l).x = paddleX + paddleWidth - paddleHeight / 2
+                particle(l).y = paddleY
+                particle(l).yVel = -4.5
+                particle(l).yAcc = -gravity * 1.5
+                particle(l).size = 2
+                particle(l).kind = bullet
+            NEXT
+        END IF
+    END IF
+
 END SUB
 
 SUB doBall
     IF ball.state = false THEN
-        ball.x = paddleX + paddleWidth / 2
+        ball.x = paddleX + magneticOffset
         ball.y = paddleY - (ball.radius)
     ELSE
         ball.x = ball.x + ball.xDir * ball.xVel
         ball.y = ball.y + ball.yDir * ball.yVel
 
-        checkCollision
+        ballCollision
     END IF
+
+    IF TIMER - special(FireBall).start < special(FireBall).span THEN
+        '_PRINTSTRING (0, 350), "fireball: " + STR$(INT(TIMER - special(FireBall).start))
+        FOR j = 1 TO 10
+            l = newParticle
+            IF l = 0 THEN EXIT FOR
+            particle(l).r = 222 + (RND * 30)
+            particle(l).g = 100 + (RND * 70)
+            particle(l).x = ball.x + COS(RND * _PI(2)) * (ball.radius * RND)
+            particle(l).y = ball.y + SIN(RND * _PI(2)) * (ball.radius * RND)
+            particle(l).lifeSpan = RND
+        NEXT
+    END IF
+
     CircleFill ball.x, ball.y, ball.radius, ball.c
 END SUB
 
-SUB checkCollision
+FUNCTION newParticle&
+    FOR i = 1 TO UBOUND(particle)
+        IF particle(i).state = false THEN
+            newParticle& = i
+            resetParticle particle(i)
+            particle(i).state = true
+            particle(i).birth = TIMER
+            EXIT FUNCTION
+        END IF
+    NEXT
+END FUNCTION
+
+SUB ballCollision
     'paddle
     IF ball.x > paddleX AND ball.x < paddleX + paddleWidth AND ball.y > paddleY AND ball.y < paddleY + paddleHeight THEN
+        IF TIMER - special(Magnetic).start < special(Magnetic).span THEN
+            ball.state = false
+            magneticOffset = ball.x - paddleX
+        END IF
+
         IF ball.x < paddleX + paddleWidth / 2 THEN
-            ball.xDir = -1
+            ball.xDir = left
             ball.xVel = map(ball.x, paddleX, paddleX + paddleWidth / 3, 6, 3)
         ELSE
-            ball.xDir = 1
+            ball.xDir = right
             ball.xVel = map(ball.x, paddleX + paddleWidth / 3, paddleX + paddleWidth, 3, 6)
         END IF
         IF ball.xVel < 3 THEN ball.xVel = 3
@@ -166,27 +461,147 @@ SUB checkCollision
     FOR i = 1 TO 80
         IF block(i).state = false THEN _CONTINUE
         IF ball.x > block(i).x AND ball.x < block(i).x + blockWidth AND ball.y > block(i).y AND ball.y < block(i).y + blockHeight THEN
-            block(i).state = false
-            IF ball.x < block(i).x + blockWidth / 2 THEN ball.xDir = -1 ELSE ball.xDir = 1
-            IF ball.y < block(i).y + blockHeight / 2 THEN ball.yDir = -1 ELSE ball.yDir = 1
-            points = ((_RED32(block(i).c) + _GREEN32(block(i).c) + _BLUE32(block(i).c)) / 3) / 10
-            score = score + points
+            destroyBlock i, true
             EXIT SUB
         END IF
     NEXT
 
     'walls
-    IF ball.x < ball.radius THEN ball.xDir = 1
-    IF ball.x > _WIDTH - ball.radius THEN ball.xDir = -1
+    IF ball.x < ball.radius THEN ball.xDir = right
+    IF ball.x > _WIDTH - ball.radius THEN ball.xDir = left
     IF ball.y > _HEIGHT + ball.radius THEN
         lives = lives - 1
+        magneticOffset = paddleWidth / 2
         ball.state = false
-        ball.xDir = 1
-        ball.yDir = -1
+        ball.xDir = right
+        ball.yDir = up
         ball.xVel = 3
         ball.yVel = 3
     END IF
-    IF ball.y < 0 THEN ball.yDir = 1
+    IF ball.y < 0 THEN ball.yDir = down
+END SUB
+
+SUB destroyBlock (i AS LONG, ballHit AS _BYTE)
+    SELECT CASE block(i).kind
+        CASE regular
+            block(i).state = false
+
+            IF TIMER - special(BreakThrough).start < special(BreakThrough).span THEN
+                maxJ = 10
+                maxK = 3
+                FOR j = 1 TO maxJ
+                    FOR k = 1 TO maxK
+                        l = newParticle
+                        IF l = 0 THEN EXIT FOR
+                        a = RND * 1000
+                        IF a < 100 THEN
+                            particle(l).r = _RED32(block(i).c)
+                            particle(l).g = _GREEN32(block(i).c)
+                            particle(l).b = _BLUE32(block(i).c)
+                        ELSE
+                            particle(l).r = map(a, 0, 1000, 50, 255)
+                            particle(l).g = map(a, 0, 1000, 50, 255)
+                            particle(l).b = map(a, 0, 1000, 50, 255)
+                        END IF
+                        particle(l).x = block(i).x + ((blockWidth / maxJ) * (j - 1))
+                        particle(l).y = block(i).y + ((blockHeight / maxK) * (k - 1))
+                        a = RND
+                        IF ball.xDir = right AND ball.yDir = up THEN
+                            particle(l).xAcc = COS(map(a, 0, 1, _PI(1.5), _PI(2)))
+                            particle(l).yAcc = SIN(map(a, 0, 1, _PI(1.5), _PI(2)))
+                        ELSEIF ball.xDir = right AND ball.yDir = down THEN
+                            particle(l).xAcc = COS(map(a, 0, 1, 0, _PI(.5)))
+                            particle(l).yAcc = SIN(map(a, 0, 1, 0, _PI(.5)))
+                        ELSEIF ball.xDir = left AND ball.yDir = up THEN
+                            particle(l).xAcc = COS(map(a, 0, 1, _PI, _PI(1.5)))
+                            particle(l).yAcc = SIN(map(a, 0, 1, _PI, _PI(1.5)))
+                        ELSEIF ball.xDir = left AND ball.yDir = down THEN
+                            particle(l).xAcc = COS(map(a, 0, 1, _PI(.5), _PI))
+                            particle(l).yAcc = SIN(map(a, 0, 1, _PI(.5), _PI))
+                        END IF
+                        particle(l).lifeSpan = .5
+                        particle(l).size = 1
+                    NEXT
+                NEXT
+            END IF
+
+            IF block(i).special THEN
+                STATIC lastSpecialGiven AS SINGLE
+                IF TIMER - lastSpecialGiven > 3 THEN
+                    lastSpecialGiven = TIMER
+                    l = newParticle
+                    IF l THEN
+                        particle(l).size = 6
+                        particle(l).x = block(i).x + blockWidth / 2
+                        particle(l).y = block(i).y + blockHeight / 2
+                        particle(l).r = 255
+                        particle(l).g = 255
+                        particle(l).b = 255
+                        particle(l).kind = specialPower
+                        particle(l).special = block(i).special
+                    END IF
+                END IF
+            END IF
+
+            points = ((_RED32(block(i).c) + _GREEN32(block(i).c) + _BLUE32(block(i).c)) / 3) / 10
+            score = score + points
+        CASE hitTwice
+            block(i).kind = regular
+        CASE unbreakable
+            'check if the ball is trapped between two unbreakable blocks
+            STATIC lastBlock(1 TO 3) AS Block
+            lastBlock(3) = lastBlock(2)
+            lastBlock(2) = lastBlock(1)
+            lastBlock(1) = block(i)
+            IF (lastBlock(1).x = lastBlock(3).x AND lastBlock(1).y = lastBlock(3).y) OR _
+               lastBlock(1).x = lastBlock(2).x AND lastBlock(1).y = lastBlock(2).y THEN
+                IF ball.xVel > 4.5 AND ball.xVel < 6 THEN
+                    ball.xVel = 6
+                ELSEIF ball.xVel = 6 THEN
+                    ball.xVel = 5
+                END IF
+
+                IF ball.xVel <= 4.5 AND ball.xVel > 3 THEN
+                    ball.xVel = 3
+                ELSEIF ball.xVel = 3 THEN
+                    ball.xVel = 4
+                END IF
+            END IF
+    END SELECT
+
+    IF ballHit THEN
+        IF (block(i).kind = unbreakable OR block(i).kind = hitTwice) THEN
+            FOR j = 1 TO map(ball.xVel, 3, 6, 3, 30)
+                l = newParticle
+                IF l = 0 THEN EXIT FOR
+                particle(l).r = 222 + (RND * 30)
+                particle(l).g = 100 + (RND * 70)
+                particle(l).x = ball.x + COS(RND * _PI(2)) * (ball.radius * RND)
+                particle(l).y = ball.y + SIN(RND * _PI(2)) * (ball.radius * RND)
+                particle(l).lifeSpan = RND
+
+                a = RND
+                IF ball.xDir = right AND ball.yDir = up THEN
+                    particle(l).xVel = COS(map(a, 0, 1, _PI(1.5), _PI(2)))
+                    particle(l).yVel = SIN(map(a, 0, 1, _PI(1.5), _PI(2)))
+                ELSEIF ball.xDir = right AND ball.yDir = down THEN
+                    particle(l).xVel = COS(map(a, 0, 1, 0, _PI(.5)))
+                    particle(l).yVel = SIN(map(a, 0, 1, 0, _PI(.5)))
+                ELSEIF ball.xDir = left AND ball.yDir = up THEN
+                    particle(l).xVel = COS(map(a, 0, 1, _PI, _PI(1.5)))
+                    particle(l).yVel = SIN(map(a, 0, 1, _PI, _PI(1.5)))
+                ELSEIF ball.xDir = left AND ball.yDir = down THEN
+                    particle(l).xVel = COS(map(a, 0, 1, _PI(.5), _PI))
+                    particle(l).yVel = SIN(map(a, 0, 1, _PI(.5), _PI))
+                END IF
+            NEXT
+        END IF
+
+        IF TIMER - special(BreakThrough).start > special(BreakThrough).span OR special(BreakThrough).start = 0 THEN
+            IF ball.x < block(i).x + blockWidth / 2 THEN ball.xDir = left ELSE ball.xDir = right
+            IF ball.y < block(i).y + blockHeight / 2 THEN ball.yDir = up ELSE ball.yDir = down
+        END IF
+    END IF
 END SUB
 
 SUB CircleFill (CX AS INTEGER, CY AS INTEGER, R AS INTEGER, C AS _UNSIGNED LONG)
