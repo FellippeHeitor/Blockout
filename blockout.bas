@@ -1,9 +1,12 @@
+'remove before release:
+'remove before release:
+
 CONST true = -1, false = 0
 
 RANDOMIZE TIMER
 
 DIM gameArea AS LONG
-gameArea = _NEWIMAGE(400, 500, 32)
+gameArea = _NEWIMAGE(800, 600, 32)
 SCREEN gameArea
 _TITLE "Blockout"
 _PRINTMODE _KEEPBACKGROUND
@@ -55,9 +58,9 @@ END TYPE
 
 CONST gravity = .03
 
-CONST blockWidth = 50
-CONST blockHeight = 25
-CONST paddleHeight = 10
+CONST blockWidth = 80
+CONST blockHeight = 30
+CONST paddleHeight = 15
 
 CONST round = 0
 CONST square = 1
@@ -74,7 +77,7 @@ CONST unbreakable = 2
 
 CONST bullet = 1
 
-DIM SHARED block(1 TO 80) AS Block, ball AS Ball
+DIM SHARED block(1 TO 100) AS Block, ball AS Ball
 DIM SHARED particle(1 TO 10000) AS Particle
 DIM SHARED win AS _BYTE, quit AS STRING * 1
 DIM SHARED paddleX AS INTEGER, paddleY AS INTEGER
@@ -100,7 +103,7 @@ FOR i = 1 TO totalSpecialPowers
     special(i).span = 15
 NEXT
 
-CONST defaultPaddleWidth = 100
+CONST defaultPaddleWidth = 150
 
 paddleY = _HEIGHT - blockHeight - paddleHeight - 1
 
@@ -112,11 +115,11 @@ DO
     paddleWidth = defaultPaddleWidth
     ball.state = false
     ball.c = _RGB32(161, 161, 155)
-    ball.radius = 5
+    ball.radius = 10
     ball.xDir = right
     ball.yDir = up
-    ball.xVel = 3
-    ball.yVel = 3
+    ball.xVel = 5
+    ball.yVel = 5
     FOR i = 1 TO totalSpecialPowers
         special(i).start = 0
     NEXT
@@ -130,13 +133,14 @@ DO
 
     DO
         k& = _KEYHIT
-        'IF k& = ASC("s") THEN special(Shooter).start = TIMER
-        'IF k& = ASC("m") THEN special(Magnetic).start = TIMER
-        'IF k& = ASC("b") THEN special(BreakThrough).start = TIMER
-        'IF k& = ASC("f") THEN special(FireBall).start = TIMER
-        'IF k& = ASC("p") THEN special(StretchPaddle).start = TIMER
-        'IF k& = ASC("P") THEN special(StretchPaddle2).start = TIMER
-        'IF k& = ASC("r") THEN EXIT DO
+        'remove before release:
+        IF k& = ASC("s") THEN special(Shooter).start = TIMER
+        IF k& = ASC("m") THEN special(Magnetic).start = TIMER
+        IF k& = ASC("b") THEN special(BreakThrough).start = TIMER
+        IF k& = ASC("f") THEN special(FireBall).start = TIMER
+        IF k& = ASC("p") THEN special(StretchPaddle).start = TIMER
+        IF k& = ASC("P") THEN special(StretchPaddle2).start = TIMER
+        IF k& = ASC("r") THEN EXIT DO
 
         noFocus%% = lostFocus
         IF (paused = true AND k& = 13) OR k& = 27 OR noFocus%% THEN
@@ -180,7 +184,7 @@ DO
             END IF
         ELSE
             IF TIMER - special(BreakThrough).start < special(BreakThrough).span THEN
-                alpha = map(ball.xVel, 3, 6, 80, 30)
+                alpha = map(ball.xVel, 5, 10, 80, 30)
             ELSE
                 alpha = 255
             END IF
@@ -197,31 +201,34 @@ DO
             COLOR _RGB32(255)
             _PRINTSTRING (0, 0), m$
 
-            'IF TIMER - special(FireBall).start < special(FireBall).span THEN
-            '    _PRINTSTRING (0, 350), "fireball: " + STR$(INT(TIMER - special(FireBall).start))
-            'END IF
+            'remove before release:
+            IF TIMER - special(FireBall).start < special(FireBall).span THEN
+                _PRINTSTRING (0, 350), "fireball: " + STR$(INT(TIMER - special(FireBall).start))
+            END IF
 
-            'IF TIMER - special(BreakThrough).start < special(BreakThrough).span THEN
-            '    _PRINTSTRING (0, 370), "breakthrough: " + STR$(INT(TIMER - special(BreakThrough).start))
-            'END IF
+            IF TIMER - special(BreakThrough).start < special(BreakThrough).span THEN
+                _PRINTSTRING (0, 370), "breakthrough: " + STR$(INT(TIMER - special(BreakThrough).start))
+            END IF
 
-            'IF TIMER - special(Shooter).start < special(Shooter).span THEN
-            '    _PRINTSTRING (0, 388), "shooter: " + STR$(INT(TIMER - special(Shooter).start))
-            'END IF
+            IF TIMER - special(Shooter).start < special(Shooter).span THEN
+                _PRINTSTRING (0, 388), "shooter: " + STR$(INT(TIMER - special(Shooter).start))
+            END IF
 
-            'IF TIMER - special(Magnetic).start < special(Magnetic).span THEN
-            '    _PRINTSTRING (0, 406), "magnetic: " + STR$(INT(TIMER - special(Magnetic).start))
-            'END IF
+            IF TIMER - special(Magnetic).start < special(Magnetic).span THEN
+                _PRINTSTRING (0, 406), "magnetic: " + STR$(INT(TIMER - special(Magnetic).start))
+            END IF
 
             IF TIMER - special(StretchPaddle).start < special(StretchPaddle).span THEN
-                '_PRINTSTRING (0, 422), "stretch: " + STR$(INT(TIMER - special(StretchPaddle).start))
+                'remove before release:
+                _PRINTSTRING (0, 422), "stretch: " + STR$(INT(TIMER - special(StretchPaddle).start))
                 paddleWidth = defaultPaddleWidth * 1.5
             ELSE
                 paddleWidth = defaultPaddleWidth
             END IF
 
             IF TIMER - special(StretchPaddle2).start < special(StretchPaddle2).span THEN
-                '_PRINTSTRING (0, 438), "stretch2: " + STR$(INT(TIMER - special(StretchPaddle2).start))
+                'remove before release:
+                _PRINTSTRING (0, 438), "stretch2: " + STR$(INT(TIMER - special(StretchPaddle2).start))
                 paddleWidth = defaultPaddleWidth * 2
             ELSE
                 IF TIMER - special(StretchPaddle).start > special(StretchPaddle).span OR special(StretchPaddle).start = 0 THEN
@@ -390,13 +397,15 @@ SUB doParticles
 
         'check collision with paddle if this particle contains a special power
         IF particle(i).special THEN
-            'IF specialDrawn = false THEN
-            '    m$ = LTRIM$(STR$(particle(i).special))
-            '    COLOR _RGB32(0)
-            '    _PRINTSTRING (particle(i).x + 1, particle(i).y + 1), m$
-            '    COLOR _RGB32(255)
-            '    _PRINTSTRING (particle(i).x, particle(i).y), m$
-            'END IF
+            'remove before release:
+            IF specialDrawn = false THEN
+                m$ = LTRIM$(STR$(particle(i).special))
+                COLOR _RGB32(0)
+                _PRINTSTRING (particle(i).x + 1, particle(i).y + 1), m$
+                COLOR _RGB32(255)
+                _PRINTSTRING (particle(i).x, particle(i).y), m$
+            END IF
+
             IF particle(i).x - particle(i).size / 2 > paddleX AND particle(i).x + particle(i).size / 2 < paddleX + paddleWidth AND particle(i).y + particle(i).size / 2 >= paddleY THEN
                 particle(i).state = false
                 special(particle(i).special).start = TIMER
@@ -405,7 +414,7 @@ SUB doParticles
 
         'check collision with blocks if this particle is a bullet
         IF particle(i).kind = bullet THEN
-            FOR j = 1 TO 80
+            FOR j = 1 TO UBOUND(block)
                 IF block(j).state = false THEN _CONTINUE
                 IF particle(i).x > block(j).x AND particle(i).x < block(j).x + blockWidth AND particle(i).y < block(j).y + blockHeight THEN
                     destroyBlock j, false
@@ -425,7 +434,7 @@ SUB resetParticle (this AS Particle)
 END SUB
 
 SUB generateBlocks
-    FOR i = 1 TO 8
+    FOR i = 1 TO 10
         FOR j = 1 TO 10
             b = b + 1
             block(b).x = (i - 1) * blockWidth
@@ -452,7 +461,7 @@ SUB generateBlocks
 END SUB
 
 SUB showBlocks
-    FOR i = 1 TO 80
+    FOR i = 1 TO UBOUND(block)
         IF block(i).state = false THEN _CONTINUE
         activeBlocks = activeBlocks + 1
         IF block(i).kind <> unbreakable THEN
@@ -477,14 +486,16 @@ SUB showBlocks
         LINE (block(i).x + 1, block(i).y + 1)-STEP(blockWidth - 3, blockHeight - 3), _RGB32(0), B
 
         IF block(i).special THEN
-            'COLOR _RGB32(0)
-            '_PRINTSTRING (block(i).x + 1, block(i).y + 1), STR$(block(i).special)
-            'COLOR _RGB32(255)
-            '_PRINTSTRING (block(i).x, block(i).y), STR$(block(i).special)
-            FOR j = 1 TO 5
+            FOR j = 1 TO 6 STEP 2
                 LINE (block(i).x + j, block(i).y + j)-STEP(blockWidth - j * 2, blockHeight - j * 2), _RGB32(255, 166, 0), B
-                LINE (block(i).x + j, block(i).y + j)-STEP(blockWidth - j * 2, blockHeight - j * 2), _RGB32(255, 238, 0), B
+                LINE (block(i).x + j + 1, block(i).y + j + 1)-STEP(blockWidth - j * 3, blockHeight - j * 3), _RGB32(255, 238, 0), B
             NEXT
+
+            'remove before release:
+            COLOR _RGB32(0)
+            _PRINTSTRING (block(i).x + 1, block(i).y + 1), STR$(block(i).special)
+            COLOR _RGB32(255)
+            _PRINTSTRING (block(i).x, block(i).y), STR$(block(i).special)
         END IF
     NEXT
     win = (activeBlocks = 0)
@@ -602,19 +613,19 @@ SUB ballCollision
 
         IF ball.x < paddleX + paddleWidth / 2 THEN
             ball.xDir = left
-            ball.xVel = map(ball.x, paddleX, paddleX + paddleWidth / 3, 6, 3)
+            ball.xVel = map(ball.x, paddleX, paddleX + paddleWidth / 3, 10, 5)
         ELSE
             ball.xDir = right
-            ball.xVel = map(ball.x, paddleX + paddleWidth / 3, paddleX + paddleWidth, 3, 6)
+            ball.xVel = map(ball.x, paddleX + paddleWidth / 3, paddleX + paddleWidth, 5, 10)
         END IF
-        IF ball.xVel < 3 THEN ball.xVel = 3
+        IF ball.xVel < 5 THEN ball.xVel = 5
 
         IF ball.yDir = 1 AND ball.y < paddleY + paddleHeight / 2 THEN ball.yDir = -1
         EXIT SUB
     END IF
 
     'blocks
-    FOR i = 1 TO 80
+    FOR i = 1 TO UBOUND(block)
         IF block(i).state = false THEN _CONTINUE
         IF ball.x > block(i).x AND ball.x < block(i).x + blockWidth AND ball.y > block(i).y AND ball.y < block(i).y + blockHeight THEN
             destroyBlock i, true
@@ -631,8 +642,8 @@ SUB ballCollision
         ball.state = false
         ball.xDir = right
         ball.yDir = up
-        ball.xVel = 3
-        ball.yVel = 3
+        ball.xVel = 5
+        ball.yVel = 5
     END IF
     IF ball.y < 0 THEN ball.yDir = down
 END SUB
@@ -714,23 +725,23 @@ SUB destroyBlock (i AS LONG, ballHit AS _BYTE)
             lastBlock(1) = block(i)
             IF (lastBlock(1).x = lastBlock(3).x AND lastBlock(1).y = lastBlock(3).y) OR _
                lastBlock(1).x = lastBlock(2).x AND lastBlock(1).y = lastBlock(2).y THEN
-                IF ball.xVel > 4.5 AND ball.xVel < 6 THEN
-                    ball.xVel = 6
-                ELSEIF ball.xVel = 6 THEN
-                    ball.xVel = 5
+                IF ball.xVel > 7.5 AND ball.xVel < 10 THEN
+                    ball.xVel = 10
+                ELSEIF ball.xVel = 10 THEN
+                    ball.xVel = 8
                 END IF
 
-                IF ball.xVel <= 4.5 AND ball.xVel > 3 THEN
-                    ball.xVel = 3
-                ELSEIF ball.xVel = 3 THEN
-                    ball.xVel = 4
+                IF ball.xVel <= 7.5 AND ball.xVel > 5 THEN
+                    ball.xVel = 5
+                ELSEIF ball.xVel = 5 THEN
+                    ball.xVel = 6
                 END IF
             END IF
     END SELECT
 
     IF ballHit THEN
         IF (block(i).kind = unbreakable OR block(i).kind = hitTwice) THEN
-            FOR j = 1 TO map(ball.xVel, 3, 6, 10, 30)
+            FOR j = 1 TO map(ball.xVel, 5, 10, 10, 30)
                 l = newParticle
                 IF l = 0 THEN EXIT FOR
                 particle(l).r = 222 + (RND * 30)
